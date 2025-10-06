@@ -3,32 +3,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
 from .. import models, schemas
-from ..dependencies import get_db
-from fastapi.security import OAuth2PasswordBearer
+from ..dependencies import get_db, get_current_user  # JWT bilan get_current_user
 
 router = APIRouter(
     prefix="/payments",
     tags=["Payments"]
 )
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-# ------------------------------
-# Dummy token -> current user
-# ------------------------------
-def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-):
-    try:
-        user_id = int(token)
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid token format")
-
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid authentication")
-    return user
 
 # ------------------------------
 # GET Payments

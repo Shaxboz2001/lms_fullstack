@@ -1,32 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from .. import models, schemas
-from ..dependencies import get_db
-from fastapi.security import OAuth2PasswordBearer
+from ..dependencies import get_db, get_current_user  # JWT bilan get_current_user
 
 router = APIRouter(
     prefix="/groups",
     tags=["Groups"]
 )
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-
-# ------------------------------
-# Dummy function: token -> current user
-# ------------------------------
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    try:
-        user_id = int(token)
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid token format")
-
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid authentication")
-    return user
-
 
 # ------------------------------
 # GET all groups
@@ -36,6 +17,7 @@ def get_groups(
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
+    # Role ga qarab guruhlarni olish
     if current_user.role in [models.UserRole.admin, models.UserRole.manager]:
         groups = db.query(models.Group).all()
     elif current_user.role == models.UserRole.teacher:
@@ -45,7 +27,7 @@ def get_groups(
     else:
         groups = []
 
-    # Return as Pydantic schema with student_ids and teacher_ids
+    # Pydantic schema ga o‘tkazish
     response = []
     for group in groups:
         response.append(
@@ -81,13 +63,17 @@ def create_group(
 
     # Student va teacher larni qo‘shish
     if group.student_ids:
-        students = db.query(models.User).filter(models.User.id.in_(group.student_ids),
-                                                models.User.role == models.UserRole.student).all()
+        students = db.query(models.User).filter(
+            models.User.id.in_(group.student_ids),
+            models.User.role == models.UserRole.student
+        ).all()
         new_group.students = students
 
     if group.teacher_ids:
-        teachers = db.query(models.User).filter(models.User.id.in_(group.teacher_ids),
-                                                models.User.role == models.UserRole.teacher).all()
+        teachers = db.query(models.User).filter(
+            models.User.id.in_(group.teacher_ids),
+            models.User.role == models.UserRole.teacher
+        ).all()
         new_group.teachers = teachers
 
     db.add(new_group)

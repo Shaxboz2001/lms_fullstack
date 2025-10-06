@@ -2,29 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from typing import List
 from .. import models, schemas
-from ..dependencies import get_db
-from fastapi.security import OAuth2PasswordBearer
+from ..dependencies import get_db, get_current_user  # JWT bilan get_current_user
 
 router = APIRouter(
     prefix="/users",
     tags=["Users"]
 )
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-# ------------------------------
-# Dummy function: token -> current user
-# ------------------------------
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    try:
-        user_id = int(token)
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid token format")
-
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid authentication")
-    return user
 
 # ------------------------------
 # GET all users
@@ -32,7 +15,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 @router.get("/", response_model=List[schemas.UserResponse])
 def get_users(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(get_current_user)  # JWT orqali
 ):
     # Admin va manager barcha userlarni ko‘ra oladi
     if current_user.role in [models.UserRole.admin, models.UserRole.manager]:
@@ -51,7 +34,7 @@ def create_user(
     password: str = Body(...),
     role: schemas.RoleEnum = Body(schemas.RoleEnum.student),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(get_current_user)  # JWT orqali
 ):
     # Faqat admin yoki manager user qo‘sha oladi
     if current_user.role not in [models.UserRole.admin, models.UserRole.manager]:
@@ -62,9 +45,14 @@ def create_user(
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
 
+    # Passwordni hash qilish
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    hashed_pw = pwd_context.hash(password)
+
     new_user = models.User(
         username=username,
-        password=password,  # Note: real loyihada hash qilinishi kerak!
+        password=hashed_pw,
         role=models.UserRole(role)
     )
 
