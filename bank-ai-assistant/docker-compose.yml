@@ -1,0 +1,49 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_DB: bank_db
+      POSTGRES_USER: bank_user
+      POSTGRES_PASSWORD: password123
+    ports:
+      - "5435:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  backend:
+    build: ./backend
+    restart: always
+    environment:
+      DB_HOST: db
+      DB_NAME: bank_db
+      DB_USER: bank_user
+      DB_PASS: password123
+      OLLAMA_HOST: http://ollama:11434   # 👈 container name
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - ollama
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama   # 👈 model saqlash uchun
+    restart: always
+
+volumes:
+  db_data:
+  ollama_data:

@@ -1,0 +1,6 @@
+version: "3.8"
+services:
+  plavka-demo:
+    build: .
+    ports:
+      - "8002:8002"  # portni 8002 ga o‘zgartirdik

@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+psycopg2-binary
+pandas
+matplotlib
+xlsxwriter
+requests
+faker
+asyncpg
+httpx

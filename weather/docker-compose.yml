@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: weather_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d
+
+  airflow-init:
+    image: apache/airflow:2.9.1
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow connections create-default-connections
+        airflow users create \
+          --username admin \
+          --password admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/weather_db
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    depends_on:
+      - postgres
+    volumes:
+      - ./dags:/opt/airflow/dags
+
+  airflow:
+    image: apache/airflow:2.9.1
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/weather_db
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - OPENWEATHER_API_KEY=f814dba39d9c82e0d2079e1740a85c63
+      - AQI_API_TOKEN=e11e2749d66a6d21a0536e22d019d7306eb1ad6e
+    depends_on:
+      - postgres
+      - airflow-init
+    volumes:
+      - ./dags:/opt/airflow/dags
+    ports:
+      - "8081:8080"
+    command: >
+      bash -c "airflow webserver & airflow scheduler"
+
+  fastapi:
+    build: ./fastapi
+    environment:
+      - DATABASE_URL=postgresql://airflow:airflow@postgres/weather_db
+    depends_on:
+      - postgres
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres_data:
