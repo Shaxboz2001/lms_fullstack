@@ -4,7 +4,7 @@ from typing import List, Optional
 from datetime import datetime
 
 # ==============================
-# Roles
+# Roles and Student status
 # ==============================
 class RoleEnum(str, Enum):
     admin = "admin"
@@ -12,21 +12,38 @@ class RoleEnum(str, Enum):
     manager = "manager"
     student = "student"
 
+class StudentStatus(str, Enum):
+    interested = "interested"
+    studying = "studying"
+    left = "left"
+    graduated = "graduated"
+
 # ==============================
 # User schemas
 # ==============================
-class UserCreate(BaseModel):
+class UserBase(BaseModel):
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    subject: Optional[str] = None
+    fee: Optional[float] = None
+    status: Optional[StudentStatus] = None
+    group_id: Optional[int] = None
+    teacher_id: Optional[int] = None
+    role: Optional[RoleEnum] = None
+    age: Optional[int] = None
+
+    class Config:
+        from_attributes = True  # V2 uchun
+
+class UserCreate(UserBase):
     username: str
     password: str
     role: RoleEnum = RoleEnum.student
 
-class UserResponse(BaseModel):
+class UserResponse(UserBase):
     id: int
-    username: str
-    role: RoleEnum
-
-    class Config:
-        orm_mode = True
 
 # ==============================
 # Group schemas
@@ -46,7 +63,7 @@ class GroupResponse(BaseModel):
     teacher_ids: List[int] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # ==============================
 # Payment schemas
@@ -59,11 +76,33 @@ class PaymentBase(BaseModel):
     group_id: Optional[int] = None
 
 class PaymentCreate(PaymentBase):
-    pass
+    month: Optional[str] = None
 
 class PaymentResponse(PaymentBase):
     id: int
     created_at: datetime
+    month: Optional[str] = None
+    student: Optional[UserResponse] = None
+    teacher: Optional[UserResponse] = None
+    group: Optional[GroupResponse] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+# ==============================
+# Attendance schemas
+# ==============================
+class AttendanceCreate(BaseModel):
+    student_id: int
+    is_present: bool
+
+class AttendanceResponse(BaseModel):
+    id: int
+    student_id: int
+    teacher_id: int
+    group_id: int
+    date: datetime
+    status: str
+
+    class Config:
+        from_attributes = True

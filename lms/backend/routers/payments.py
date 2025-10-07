@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
+from datetime import date
 from .. import models, schemas
-from ..dependencies import get_db, get_current_user  # JWT bilan get_current_user
+from ..dependencies import get_db, get_current_user
 
 router = APIRouter(
     prefix="/payments",
@@ -50,6 +51,7 @@ def create_payment(
     student_id: Optional[int] = Body(None),
     teacher_id: Optional[int] = Body(None),
     group_id: Optional[int] = Body(None),
+    month: Optional[str] = Body(None),  # yangi maydon
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -65,17 +67,35 @@ def create_payment(
             if not group or current_user not in group.teachers:
                 raise HTTPException(status_code=403, detail="You can only add payments for your groups")
 
+    # Agar month berilmagan bo‘lsa, hozirgi oyni default qilamiz
+    if not month:
+        month = date.today().strftime("%Y-%m")  # misol: '2025-10'
+
     # Create payment
     payment = models.Payment(
         amount=amount,
         description=description,
         student_id=student_id,
         teacher_id=teacher_id,
-        group_id=group_id
+        group_id=group_id,
+        month=month  # saqlaymiz
     )
 
     db.add(payment)
     db.commit()
     db.refresh(payment)
 
-    return payment
+    # Return full student/teacher/group info using from_orm
+    return schemas.PaymentResponse(
+        id=payment.id,
+        amount=payment.amount,
+        description=payment.description,
+        created_at=payment.created_at,
+        month=payment.month,
+        student=schemas.UserResponse.from_orm(payment.student) if payment.student else None,
+        teacher=schemas.UserResponse.from_orm(payment.teacher) if payment.teacher else None,
+        group=schemas.GroupResponse.from_orm(payment.group) if payment.group else None,
+        student_id=payment.student_id,
+        teacher_id=payment.teacher_id,
+        group_id=payment.group_id
+    )

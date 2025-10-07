@@ -6,7 +6,9 @@ from .database import Base, engine
 from .routers import users
 from .routers import groups
 from .routers import payments
-from . import models
+from .routers import students
+from .routers import attendance
+from .routers import teachers
 
 app = FastAPI(title="LMS Backend")
 
@@ -31,7 +33,10 @@ app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(payments.router)
 app.include_router(users.router)
-app.include_router(groups.router)  # users routerini qo‘shish
+app.include_router(groups.router)
+app.include_router(students.router)
+app.include_router(attendance.router)
+app.include_router(teachers.router)
 
 
 @app.get("/")

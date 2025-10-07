@@ -88,3 +88,25 @@ def create_group(
         student_ids=[s.id for s in new_group.students],
         teacher_ids=[t.id for t in new_group.teachers]
     )
+
+# ------------------------------
+# GET all students in a group
+# ------------------------------
+@router.get("/{group_id}/students/", response_model=List[schemas.UserResponse])
+def get_group_students(
+        group_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
+):
+    group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    # Role bilan tekshirish: teacher faqat o‘z guruhidagi o‘quvchilarni oladi
+    if current_user.role == models.UserRole.teacher and current_user not in group.teachers:
+        raise HTTPException(status_code=403, detail="Not allowed to view students in this group")
+    elif current_user.role == models.UserRole.student:
+        raise HTTPException(status_code=403, detail="Students cannot view other students")
+
+    # O‘quvchilar ro‘yxatini qaytarish
+    return [schemas.UserResponse.from_orm(student) for student in group.students]
