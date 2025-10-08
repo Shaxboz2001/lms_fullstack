@@ -45,12 +45,12 @@ class User(Base):
     status = Column(Enum(StudentStatus), default=StudentStatus.interested)
 
     # Relationships
-    payments_as_student = relationship("Payment", foreign_keys="Payment.student_id", back_populates="student")
-    payments_as_teacher = relationship("Payment", foreign_keys="Payment.teacher_id", back_populates="teacher")
     groups_as_teacher = relationship("Group", secondary="group_teachers", back_populates="teachers")
     groups_as_student = relationship("Group", secondary="group_students", back_populates="students")
     attendances_as_student = relationship("Attendance", foreign_keys="Attendance.student_id", back_populates="student")
     attendances_as_teacher = relationship("Attendance", foreign_keys="Attendance.teacher_id", back_populates="teacher")
+    payments_as_student = relationship("Payment", foreign_keys="Payment.student_id", back_populates="student")
+    payments_as_teacher = relationship("Payment", foreign_keys="Payment.teacher_id", back_populates="teacher")
 
 # ==============================
 # Many-to-Many relationships
@@ -82,14 +82,16 @@ class Group(Base):
 
     students = relationship("User", secondary=group_students, back_populates="groups_as_student")
     teachers = relationship("User", secondary=group_teachers, back_populates="groups_as_teacher")
-    payments = relationship("Payment", back_populates="group")
     attendances = relationship("Attendance", back_populates="group")
+    payments = relationship("Payment", back_populates="group")
+
+    tests = relationship("Test", back_populates="group")
 
 # ==============================
 # Payment model
 # ==============================
 class Payment(Base):
-    __tablename__ = "payment"
+    __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True)
     amount = Column(Float, nullable=False)
@@ -120,3 +122,48 @@ class Attendance(Base):
     student = relationship("User", foreign_keys=[student_id], back_populates="attendances_as_student")
     teacher = relationship("User", foreign_keys=[teacher_id], back_populates="attendances_as_teacher")
     group = relationship("Group", back_populates="attendances")
+
+# ==============================
+# Test models
+# ==============================
+class Test(Base):
+    __tablename__ = "tests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(String)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    group_id = Column(Integer, ForeignKey("groups.id"))
+
+    group = relationship("Group", back_populates="tests")
+    questions = relationship("Question", back_populates="test")  # << bu kerak!
+
+class Question(Base):
+    __tablename__ = "questions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    test_id = Column(Integer, ForeignKey("tests.id"))
+    text = Column(String, nullable=False)
+    type = Column(String, default="single")  # single / multiple
+
+    test = relationship("Test", back_populates="questions")
+    options = relationship("Option", back_populates="question")
+
+class Option(Base):
+    __tablename__ = "options"
+
+    id = Column(Integer, primary_key=True, index=True)
+    question_id = Column(Integer, ForeignKey("questions.id"))
+    text = Column(String, nullable=False)
+    is_correct = Column(Integer, default=0)  # 1 = true, 0 = false
+
+    question = relationship("Question", back_populates="options")
+
+class StudentAnswer(Base):
+    __tablename__ = "student_answers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"))
+    question_id = Column(Integer, ForeignKey("questions.id"))
+    selected_option_id = Column(Integer, ForeignKey("options.id"))
+    submitted_at = Column(DateTime, default=datetime.utcnow)

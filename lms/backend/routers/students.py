@@ -3,11 +3,15 @@ from sqlalchemy.orm import Session
 from typing import List
 from .. import models, schemas
 from ..dependencies import get_db, get_current_user
+from passlib.context import CryptContext
 
 router = APIRouter(
     prefix="/students",
     tags=["Students"]
 )
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 # ✅ Student qo‘shish
 @router.post("/", response_model=schemas.UserResponse)
@@ -23,18 +27,24 @@ def create_student(
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
 
+    # 🔥 Parolni hash qilib saqlaymiz
+    hashed_password = pwd_context.hash(student.password or "1234")
+
     new_student = models.User(
         username=student.username,
         full_name=student.full_name,
-        password=student.password,
+        password=hashed_password,  # 🔥 bu yerda endi hashlangan parol
         phone=student.phone,
         address=student.address,
         role=models.UserRole.student,
         subject=student.subject,
         fee=student.fee,
         status=student.status or models.StudentStatus.studying,
-        age=student.age  # ✅ yosh kiritish
+        age=student.age,
+        group_id=student.group_id,
+        teacher_id=student.teacher_id
     )
+
     db.add(new_student)
     db.commit()
     db.refresh(new_student)
@@ -71,16 +81,30 @@ def update_student(
     if current_user.role not in [models.UserRole.admin, models.UserRole.manager, models.UserRole.teacher]:
         raise HTTPException(status_code=403, detail="Not allowed")
 
-    student = db.query(models.User).filter(models.User.id == student_id, models.User.role == models.UserRole.student).first()
+    student = db.query(models.User).filter(
+        models.User.id == student_id,
+        models.User.role == models.UserRole.student
+    ).first()
+
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    for key, value in updated.dict(exclude_unset=True).items():
+    update_data = updated.dict(exclude_unset=True)
+
+    # 🔒 Agar password kelgan bo‘lsa — hash qilamiz
+    if "password" in update_data and update_data["password"]:
+        from passlib.context import CryptContext
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        update_data["password"] = pwd_context.hash(update_data["password"])
+
+    # 🔁 Boshqa fieldlarni yangilaymiz
+    for key, value in update_data.items():
         setattr(student, key, value)
 
     db.commit()
     db.refresh(student)
     return student
+
 
 
 # ✅ Studentni o‘chirish

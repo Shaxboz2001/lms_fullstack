@@ -1,10 +1,10 @@
 from pydantic import BaseModel
-from enum import Enum
 from typing import List, Optional
 from datetime import datetime
+from enum import Enum
 
 # ==============================
-# Roles and Student status
+# Role va Student status enumlari
 # ==============================
 class RoleEnum(str, Enum):
     admin = "admin"
@@ -12,38 +12,46 @@ class RoleEnum(str, Enum):
     manager = "manager"
     student = "student"
 
+
 class StudentStatus(str, Enum):
     interested = "interested"
     studying = "studying"
     left = "left"
     graduated = "graduated"
 
+
 # ==============================
 # User schemas
 # ==============================
 class UserBase(BaseModel):
-    username: Optional[str] = None
-    full_name: Optional[str] = None
-    phone: Optional[str] = None
-    address: Optional[str] = None
-    subject: Optional[str] = None
-    fee: Optional[float] = None
-    status: Optional[StudentStatus] = None
-    group_id: Optional[int] = None
-    teacher_id: Optional[int] = None
-    role: Optional[RoleEnum] = None
+    username: Optional[str]
+    full_name: Optional[str]
+    phone: Optional[str]
+    address: Optional[str]
+    subject: Optional[str]
+    fee: Optional[float]
+    status: Optional[StudentStatus] = StudentStatus.studying
+    group_id: Optional[int] = None          # ✅ optional
+    teacher_id: Optional[int] = None        # ✅ optional
+    role: Optional[RoleEnum] = RoleEnum.student
     age: Optional[int] = None
 
     class Config:
-        from_attributes = True  # V2 uchun
+        from_attributes = True
+
 
 class UserCreate(UserBase):
     username: str
-    password: str
-    role: RoleEnum = RoleEnum.student
+    password: Optional[str] = "1234"        # ✅ default password
+
 
 class UserResponse(UserBase):
     id: int
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 
 # ==============================
 # Group schemas
@@ -53,6 +61,7 @@ class GroupCreate(BaseModel):
     description: Optional[str] = None
     student_ids: Optional[List[int]] = []
     teacher_ids: Optional[List[int]] = []
+
 
 class GroupResponse(BaseModel):
     id: int
@@ -65,6 +74,7 @@ class GroupResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 # ==============================
 # Payment schemas
 # ==============================
@@ -75,8 +85,10 @@ class PaymentBase(BaseModel):
     teacher_id: Optional[int] = None
     group_id: Optional[int] = None
 
+
 class PaymentCreate(PaymentBase):
     month: Optional[str] = None
+
 
 class PaymentResponse(PaymentBase):
     id: int
@@ -89,12 +101,14 @@ class PaymentResponse(PaymentBase):
     class Config:
         from_attributes = True
 
+
 # ==============================
 # Attendance schemas
 # ==============================
 class AttendanceCreate(BaseModel):
     student_id: int
     is_present: bool
+
 
 class AttendanceResponse(BaseModel):
     id: int
@@ -106,3 +120,73 @@ class AttendanceResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ==============================
+# Test schemas
+# ==============================
+class OptionCreate(BaseModel):
+    text: str
+    is_correct: Optional[int] = 0   # ✅ integer (0 yoki 1) sifatida saqlanadi
+
+
+class QuestionCreate(BaseModel):
+    text: str
+    type: str = "single"
+    options: List[OptionCreate]
+
+
+class TestCreate(BaseModel):
+    title: str
+    description: Optional[str]
+    group_id: int                    # ✅ test aniq bir guruh uchun
+    questions: List[QuestionCreate]
+
+
+class OptionResponse(BaseModel):
+    id: int
+    text: str
+    is_correct: Optional[int] = 0
+
+    class Config:
+        from_attributes = True
+
+
+class QuestionResponse(BaseModel):
+    id: int
+    text: str
+    type: str
+    options: List[OptionResponse]
+
+    class Config:
+        from_attributes = True
+
+
+class TestResponse(BaseModel):
+    id: int
+    title: str
+    description: Optional[str]
+    group_id: int
+    questions: List[QuestionResponse]
+
+    class Config:
+        from_attributes = True
+
+
+class StudentAnswerCreate(BaseModel):
+    question_id: int
+    selected_option_id: int
+class AnswerItem(BaseModel):
+    question_id: int
+    option_id: int
+class TestSubmit(BaseModel):
+    answers: List[AnswerItem]
+
+
+class TestResultResponse(BaseModel):
+    student_name: str
+    score: int
+    total: int
+
+    class Config:
+        orm_mode = True

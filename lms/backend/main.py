@@ -9,13 +9,14 @@ from .routers import payments
 from .routers import students
 from .routers import attendance
 from .routers import teachers
+from .routers import tests
 
 app = FastAPI(title="LMS Backend")
 
 origins = [
     "http://localhost:5173",  # React dev server
     "http://127.0.0.1:5173",
-    "http://localhost:3002",
+    "http://localhost:3000",
     "http://127.0.0.1:3000"
 ]
 
@@ -37,6 +38,7 @@ app.include_router(groups.router)
 app.include_router(students.router)
 app.include_router(attendance.router)
 app.include_router(teachers.router)
+app.include_router(tests.router)
 
 
 @app.get("/")
