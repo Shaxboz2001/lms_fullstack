@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Enum, Float, ForeignKey, DateTime, Table
+from sqlalchemy import Column, Integer, String, Enum, Float, ForeignKey, DateTime, Table, Text, Date
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
@@ -23,7 +23,7 @@ class StudentStatus(str, enum.Enum):
     graduated = "graduated"
 
 # ==============================
-# User model
+# User models
 # ==============================
 class User(Base):
     __tablename__ = "users"
@@ -51,6 +51,11 @@ class User(Base):
     attendances_as_teacher = relationship("Attendance", foreign_keys="Attendance.teacher_id", back_populates="teacher")
     payments_as_student = relationship("Payment", foreign_keys="Payment.student_id", back_populates="student")
     payments_as_teacher = relationship("Payment", foreign_keys="Payment.teacher_id", back_populates="teacher")
+
+    # ✅ Qo‘shilganlar:
+    created_courses = relationship("Course", back_populates="creator")  # o‘zi yaratgan kurslar
+    enrolled_courses = relationship("StudentCourse", back_populates="student")  # o‘zi qatnashgan kurslar
+
 
 # ==============================
 # Many-to-Many relationships
@@ -84,8 +89,10 @@ class Group(Base):
     teachers = relationship("User", secondary=group_teachers, back_populates="groups_as_teacher")
     attendances = relationship("Attendance", back_populates="group")
     payments = relationship("Payment", back_populates="group")
-
     tests = relationship("Test", back_populates="group")
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True)
+    course = relationship("Course")
+
 
 # ==============================
 # Payment model
@@ -134,9 +141,9 @@ class Test(Base):
     description = Column(String)
     created_by = Column(Integer, ForeignKey("users.id"))
     group_id = Column(Integer, ForeignKey("groups.id"))
-
+    created_at = Column(DateTime, default=datetime.utcnow)  # ✅ shu yer
     group = relationship("Group", back_populates="tests")
-    questions = relationship("Question", back_populates="test")  # << bu kerak!
+    questions = relationship("Question", back_populates="test")
 
 class Question(Base):
     __tablename__ = "questions"
@@ -167,3 +174,40 @@ class StudentAnswer(Base):
     question_id = Column(Integer, ForeignKey("questions.id"))
     selected_option_id = Column(Integer, ForeignKey("options.id"))
     submitted_at = Column(DateTime, default=datetime.utcnow)
+
+# ==============================
+# Course model
+# ==============================
+class Course(Base):
+    __tablename__ = "courses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    subject = Column(String, nullable=False)
+    teacher_name = Column(String, nullable=False)
+    price = Column(Integer, nullable=True)
+    start_date = Column(Date, nullable=True)
+    description = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    creator = relationship("User", back_populates="created_courses")
+    students = relationship("StudentCourse", back_populates="course")
+    teacher_id = Column(Integer, ForeignKey("users.id"))
+    teacher = relationship("User", foreign_keys=[teacher_id])
+
+# ==============================
+# StudentCourse model
+# ==============================
+class StudentCourse(Base):
+    __tablename__ = "student_courses"
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("users.id"))
+    course_id = Column(Integer, ForeignKey("courses.id"))
+    joined_at = Column(DateTime, default=datetime.utcnow)
+
+    student = relationship("User", back_populates="enrolled_courses")
+    course = relationship("Course", back_populates="students")
+
+

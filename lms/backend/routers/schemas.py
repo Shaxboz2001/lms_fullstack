@@ -2,6 +2,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
+from datetime import date
+
 
 # ==============================
 # Role va Student status enumlari
@@ -40,14 +42,36 @@ class UserBase(BaseModel):
         from_attributes = True
 
 
-class UserCreate(UserBase):
+class UserCreate(BaseModel):
     username: str
-    password: Optional[str] = "1234"        # ✅ default password
+    password: str
+    role: str
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    subject: Optional[str] = None
+    fee: Optional[int] = 0
+    status: Optional[StudentStatus] = StudentStatus.studying  # <-- qo‘shildi
+    age: Optional[int] = None
+    group_id: Optional[int] = None
+    teacher_id: Optional[int] = None  # optional
+
 
 
 class UserResponse(UserBase):
     id: int
     created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    password: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    age: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -61,6 +85,8 @@ class GroupCreate(BaseModel):
     description: Optional[str] = None
     student_ids: Optional[List[int]] = []
     teacher_ids: Optional[List[int]] = []
+    course_id: Optional[int] = None   # ✅ yangi qo‘shildi
+
 
 
 class GroupResponse(BaseModel):
@@ -70,6 +96,7 @@ class GroupResponse(BaseModel):
     created_at: datetime
     student_ids: List[int] = []
     teacher_ids: List[int] = []
+    course_id: Optional[int] = None  # ✅ yangi qo‘shildi
 
     class Config:
         from_attributes = True
@@ -190,3 +217,29 @@ class TestResultResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class CourseBase(BaseModel):
+    title: str
+    description: str
+    start_date: date | None = None
+    end_date: date | None = None
+    price: float | None = None
+
+
+class CourseCreate(BaseModel):
+    title: str
+    subject: str
+    teacher_id: int           # <-- frontend shu id ni yuborishi kerak
+    description: Optional[str] = None
+    start_date: Optional[date] = None
+    price: Optional[float] = 0.0
+
+
+class CourseOut(CourseBase):
+    id: int
+    creator_id: int
+    creator_name: str | None = None
+
+    class Config:
+        from_attributes = True  # ✅ Pydantic v2 uchun to‘g‘ri variant
