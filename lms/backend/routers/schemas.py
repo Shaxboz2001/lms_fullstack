@@ -101,6 +101,12 @@ class GroupResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class GroupUpdate(BaseModel):
+    name: Optional[str] = None
+    course_id: Optional[int] = None
+    teacher_id: Optional[int] = None
+    student_id: Optional[int] = None
+
 
 # ==============================
 # Payment schemas

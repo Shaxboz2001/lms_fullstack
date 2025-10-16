@@ -1,85 +1,98 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-from .dependencies import get_db, get_current_user
-from .schemas import GroupCreate, GroupResponse, UserResponse
-from .models import Group, User, Course, UserRole
+from .dependencies import get_db
+from .models import Group, Course, User, UserRole
+from .schemas import GroupCreate, GroupUpdate, GroupResponse
 
 groups_router = APIRouter(prefix="/groups", tags=["Groups"])
 
 # ------------------------------
-# CREATE Group
+# CREATE group
 # ------------------------------
 @groups_router.post("/", response_model=GroupResponse)
-def create_group(
-    group: GroupCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if current_user.role not in [UserRole.admin, UserRole.manager]:
-        raise HTTPException(status_code=403, detail="Guruh yaratish uchun ruxsat yo‘q")
-
+def create_group(group: GroupCreate, db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == group.course_id).first()
     if not course:
-        raise HTTPException(status_code=404, detail="Kurs topilmadi")
+        raise HTTPException(status_code=404, detail="Course not found")
 
-    new_group = Group(name=group.name, description=group.description, course_id=group.course_id)
-
-    # O‘quvchilar
-    students = db.query(User).filter(User.id.in_(group.student_ids), User.role == UserRole.student).all()
-    teachers = db.query(User).filter(User.id.in_(group.teacher_ids), User.role == UserRole.teacher).all()
-
-    new_group.students = students
-    new_group.teachers = teachers
-
+    new_group = Group(
+        name=group.name,
+        course_id=group.course_id,
+        teacher_id=group.teacher_id,
+        student_id=group.student_id
+    )
     db.add(new_group)
     db.commit()
     db.refresh(new_group)
-
-    return GroupResponse.from_orm(new_group)
-
-
-# ------------------------------
-# GET All Groups
-# ------------------------------
-@groups_router.get("/", response_model=List[GroupResponse])
-def get_groups(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role in [UserRole.admin, UserRole.manager]:
-        groups = db.query(Group).all()
-    elif current_user.role == UserRole.teacher:
-        groups = current_user.groups_as_teacher
-    else:
-        groups = current_user.groups_as_student
-    return groups
+    return new_group
 
 
 # ------------------------------
-# GET Students in Group
+# GET all groups
 # ------------------------------
-@groups_router.get("/{group_id}/students", response_model=List[UserResponse])
-def get_group_students(group_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@groups_router.get("/", response_model=list[GroupResponse])
+def get_groups(db: Session = Depends(get_db)):
+    groups = db.query(Group).all()
+    return [
+        GroupResponse(
+            id=g.id,
+            name=g.name,
+            course_id=g.course_id,
+            course_name=g.course.title if g.course else None,
+            teacher_id=g.teacher_id,
+            teacher_name=g.teacher.full_name if g.teacher else None,
+            student_id=g.student_id,
+            student_name=g.student.full_name if g.student else None,
+        )
+        for g in groups
+    ]
+
+
+# ------------------------------
+# UPDATE group
+# ------------------------------
+@groups_router.put("/{group_id}", response_model=GroupResponse)
+def update_group(group_id: int, updated: GroupUpdate, db: Session = Depends(get_db)):
     group = db.query(Group).filter(Group.id == group_id).first()
     if not group:
-        raise HTTPException(status_code=404, detail="Guruh topilmadi")
+        raise HTTPException(status_code=404, detail="Group not found")
 
-    if current_user.role == UserRole.teacher and current_user not in group.teachers:
-        raise HTTPException(status_code=403, detail="Bu guruhga kirish mumkin emas")
+    group.name = updated.name or group.name
+    group.course_id = updated.course_id or group.course_id
+    group.teacher_id = updated.teacher_id or group.teacher_id
+    group.student_id = updated.student_id or group.student_id
 
-    return group.students
+    db.commit()
+    db.refresh(group)
+    return group
 
 
 # ------------------------------
-# DELETE Group
+# DELETE group
 # ------------------------------
 @groups_router.delete("/{group_id}")
-def delete_group(group_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role not in [UserRole.admin, UserRole.manager]:
-        raise HTTPException(status_code=403, detail="O‘chirishga ruxsat yo‘q")
-
+def delete_group(group_id: int, db: Session = Depends(get_db)):
     group = db.query(Group).filter(Group.id == group_id).first()
     if not group:
-        raise HTTPException(status_code=404, detail="Guruh topilmadi")
-
+        raise HTTPException(status_code=404, detail="Group not found")
     db.delete(group)
     db.commit()
-    return {"message": f"Guruh '{group.name}' muvaffaqiyatli o‘chirildi"}
+    return {"message": "Group deleted successfully"}
+
+
+# ------------------------------
+# GET courses, teachers, students
+# ------------------------------
+@groups_router.get("/courses")
+def get_courses(db: Session = Depends(get_db)):
+    return db.query(Course).all()
+
+
+@groups_router.get("/teachers/{course_id}")
+def get_teachers_for_course(course_id: int, db: Session = Depends(get_db)):
+    return db.query(User).filter(User.role == UserRole.teacher, User.course_id == course_id).all()
+
+
+@groups_router.get("/students/{course_id}")
+def get_students_for_course(course_id: int, db: Session = Depends(get_db)):
+    return db.query(User).filter(User.role == UserRole.student, User.course_id == course_id).all()
