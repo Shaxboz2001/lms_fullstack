@@ -1,11 +1,15 @@
-from sqlalchemy import Column, Integer, String, Enum, Float, ForeignKey, DateTime, Table, Text, Date
+from typing import Optional
+from sqlalchemy import (
+    Column, Integer, String, Enum, Float, ForeignKey,
+    DateTime, Table, Text, Date, JSON, UniqueConstraint
+)
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
 import enum
 
 # ==============================
-# User roles
+# ENUMS
 # ==============================
 class UserRole(str, enum.Enum):
     admin = "admin"
@@ -13,48 +17,18 @@ class UserRole(str, enum.Enum):
     manager = "manager"
     student = "student"
 
-# ==============================
-# Student status
-# ==============================
+
 class StudentStatus(str, enum.Enum):
     interested = "interested"
     studying = "studying"
     left = "left"
     graduated = "graduated"
 
-# ==============================
-# User models
-# ==============================
-class User(Base):
-    __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, nullable=False, index=True)
-    full_name = Column(String, nullable=True)
-    password = Column(String, nullable=False)
-    role = Column(Enum(UserRole), default=UserRole.student)
-    phone = Column(String, nullable=True)
-    address = Column(String, nullable=True)
-    age = Column(Integer, nullable=True)
-
-    # Student-specific
-    group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
-    teacher_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    subject = Column(String, nullable=True)
-    fee = Column(Float, nullable=True)
-    status = Column(Enum(StudentStatus), default=StudentStatus.interested)
-
-    # Relationships
-    groups_as_teacher = relationship("Group", secondary="group_teachers", back_populates="teachers")
-    groups_as_student = relationship("Group", secondary="group_students", back_populates="students")
-    attendances_as_student = relationship("Attendance", foreign_keys="Attendance.student_id", back_populates="student")
-    attendances_as_teacher = relationship("Attendance", foreign_keys="Attendance.teacher_id", back_populates="teacher")
-    payments_as_student = relationship("Payment", foreign_keys="Payment.student_id", back_populates="student")
-    payments_as_teacher = relationship("Payment", foreign_keys="Payment.teacher_id", back_populates="teacher")
-
-    # ✅ Qo‘shilganlar:
-    created_courses = relationship("Course", back_populates="creator")  # o‘zi yaratgan kurslar
-    enrolled_courses = relationship("StudentCourse", back_populates="student")  # o‘zi qatnashgan kurslar
+class PaymentStatus(str, enum.Enum):
+    paid = "paid"
+    partial = "partial"
+    unpaid = "unpaid"
 
 
 # ==============================
@@ -66,16 +40,89 @@ group_students = Table(
     Column("group_id", Integer, ForeignKey("groups.id")),
     Column("student_id", Integer, ForeignKey("users.id"))
 )
-
 group_teachers = Table(
     "group_teachers",
     Base.metadata,
     Column("group_id", Integer, ForeignKey("groups.id")),
     Column("teacher_id", Integer, ForeignKey("users.id"))
 )
+# ==============================
+# USER MODEL
+# ==============================
+class User(Base):
+    __tablename__ = "users"
+    __allow_unmapped__ = True
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    full_name = Column(String, nullable=True)
+    password = Column(String, nullable=False)
+    role = Column(Enum(UserRole), default=UserRole.student)
+    phone = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    age = Column(Integer, nullable=True)
+    subject = Column(String, nullable=True)
+    fee = Column(Float, nullable=True, default=0.0)
+    status = Column(Enum(StudentStatus), default=StudentStatus.interested)
+    teacher_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="SET NULL"), nullable=True)
+    teacher_percent = Column(Float, nullable=True)  # custom percent for each teacher
+    balance = Column(Float, default=0.0)
+
+
+    # 🔹 Relationships
+    # Teacher bo‘lgan user -> group’lar
+    groups_as_teacher = relationship(
+        "Group",
+        back_populates="teacher",
+        foreign_keys="Group.teacher_id"
+    )
+
+    # Student bo‘lgan user -> group’lar
+    groups_as_student = relationship(
+        "Group",
+        secondary=group_students,
+        back_populates="students"
+    )
+
+    # Attendances
+    attendances_as_student = relationship(
+        "Attendance",
+        foreign_keys="Attendance.student_id",
+        back_populates="student"
+    )
+    attendances_as_teacher = relationship(
+        "Attendance",
+        foreign_keys="Attendance.teacher_id",
+        back_populates="teacher"
+    )
+
+    # Payments
+    payments_as_student = relationship(
+        "Payment",
+        foreign_keys="Payment.student_id",
+        back_populates="student"
+    )
+    payments_as_teacher = relationship(
+        "Payment",
+        foreign_keys="Payment.teacher_id",
+        back_populates="teacher"
+    )
+
+    # Courses
+    created_courses = relationship(
+        "Course",
+        back_populates="creator",
+        foreign_keys="[Course.created_by]"
+    )
+    enrolled_courses = relationship(
+        "StudentCourse",
+        back_populates="student"
+    )
+
 
 # ==============================
-# Group model
+# GROUP MODEL
 # ==============================
 class Group(Base):
     __tablename__ = "groups"
@@ -85,17 +132,21 @@ class Group(Base):
     description = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True)
+    teacher_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # 🔹 Relationships
+    course = relationship("Course", back_populates="groups")
+    teacher = relationship("User", back_populates="groups_as_teacher", foreign_keys=[teacher_id])
     students = relationship("User", secondary=group_students, back_populates="groups_as_student")
-    teachers = relationship("User", secondary=group_teachers, back_populates="groups_as_teacher")
+
     attendances = relationship("Attendance", back_populates="group")
     payments = relationship("Payment", back_populates="group")
     tests = relationship("Test", back_populates="group")
-    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True)
-    course = relationship("Course")
 
 
 # ==============================
-# Payment model
+# PAYMENT MODEL
 # ==============================
 class Payment(Base):
     __tablename__ = "payments"
@@ -106,15 +157,23 @@ class Payment(Base):
     student_id = Column(Integer, ForeignKey("users.id"))
     teacher_id = Column(Integer, ForeignKey("users.id"))
     group_id = Column(Integer, ForeignKey("groups.id"))
-    month = Column(String(7), nullable=True)
+    month = Column(String(7), nullable=True)  # 2025-10
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    total_due = Column(Float, default=0)
+    debt_amount = Column(Float, default=0)
+    status = Column(Enum(PaymentStatus), default=PaymentStatus.unpaid)
+    due_date = Column(Date, nullable=True)
+    is_overdue = Column(Integer, default=0)
+
+    # 🔹 Relationships
     student = relationship("User", foreign_keys=[student_id], back_populates="payments_as_student")
     teacher = relationship("User", foreign_keys=[teacher_id], back_populates="payments_as_teacher")
     group = relationship("Group", back_populates="payments")
 
+
 # ==============================
-# Attendance model
+# ATTENDANCE MODEL
 # ==============================
 class Attendance(Base):
     __tablename__ = "attendance"
@@ -124,14 +183,17 @@ class Attendance(Base):
     teacher_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
     date = Column(DateTime, default=datetime.utcnow)
-    status = Column(String, default="present")  # present / absent / late
+    status = Column(String, default="present")
+    reason = Column(String, nullable=True, default=None)  # ✅ sababsiz / sababli
+
 
     student = relationship("User", foreign_keys=[student_id], back_populates="attendances_as_student")
     teacher = relationship("User", foreign_keys=[teacher_id], back_populates="attendances_as_teacher")
     group = relationship("Group", back_populates="attendances")
 
+
 # ==============================
-# Test models
+# TEST MODEL
 # ==============================
 class Test(Base):
     __tablename__ = "tests"
@@ -141,9 +203,25 @@ class Test(Base):
     description = Column(String)
     created_by = Column(Integer, ForeignKey("users.id"))
     group_id = Column(Integer, ForeignKey("groups.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)  # ✅ shu yer
+    created_at = Column(DateTime, default=datetime.utcnow)
+
     group = relationship("Group", back_populates="tests")
     questions = relationship("Question", back_populates="test")
+
+class TestGroup(Base):
+    __tablename__ = "test_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    test_id = Column(Integer, ForeignKey("tests.id", ondelete="CASCADE"))
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"))
+
+    __table_args__ = (
+        UniqueConstraint("test_id", "group_id", name="unique_test_group"),
+    )
+
+    test = relationship("Test", back_populates="test_groups")
+    group = relationship("Group", back_populates="test_groups")
+
 
 class Question(Base):
     __tablename__ = "questions"
@@ -151,10 +229,11 @@ class Question(Base):
     id = Column(Integer, primary_key=True, index=True)
     test_id = Column(Integer, ForeignKey("tests.id"))
     text = Column(String, nullable=False)
-    type = Column(String, default="single")  # single / multiple
+    type = Column(String, default="single")
 
     test = relationship("Test", back_populates="questions")
     options = relationship("Option", back_populates="question")
+
 
 class Option(Base):
     __tablename__ = "options"
@@ -162,9 +241,10 @@ class Option(Base):
     id = Column(Integer, primary_key=True, index=True)
     question_id = Column(Integer, ForeignKey("questions.id"))
     text = Column(String, nullable=False)
-    is_correct = Column(Integer, default=0)  # 1 = true, 0 = false
+    is_correct = Column(Integer, default=0)
 
     question = relationship("Question", back_populates="options")
+
 
 class StudentAnswer(Base):
     __tablename__ = "student_answers"
@@ -175,29 +255,35 @@ class StudentAnswer(Base):
     selected_option_id = Column(Integer, ForeignKey("options.id"))
     submitted_at = Column(DateTime, default=datetime.utcnow)
 
+
+
+
 # ==============================
-# Course model
+# COURSE MODEL
 # ==============================
 class Course(Base):
     __tablename__ = "courses"
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
-    subject = Column(String, nullable=False)
-    teacher_name = Column(String, nullable=False)
-    price = Column(Integer, nullable=True)
-    start_date = Column(Date, nullable=True)
+    subject = Column(String, nullable=True)
     description = Column(Text, nullable=True)
-    created_by = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    price = Column(Float, default=0)
+    start_date = Column(Date, nullable=True)
 
-    creator = relationship("User", back_populates="created_courses")
-    students = relationship("StudentCourse", back_populates="course")
-    teacher_id = Column(Integer, ForeignKey("users.id"))
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    teacher_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    teacher_name = Column(String, nullable=True)
+
+    creator = relationship("User", back_populates="created_courses", foreign_keys=[created_by])
     teacher = relationship("User", foreign_keys=[teacher_id])
 
+    students = relationship("StudentCourse", back_populates="course")
+    groups = relationship("Group", back_populates="course")  # 🔥 course–group bog‘lanishi
+
+
 # ==============================
-# StudentCourse model
+# STUDENT COURSE MODEL
 # ==============================
 class StudentCourse(Base):
     __tablename__ = "student_courses"
@@ -210,4 +296,58 @@ class StudentCourse(Base):
     student = relationship("User", back_populates="enrolled_courses")
     course = relationship("Course", back_populates="students")
 
+# salary
+
+class SalarySetting(Base):
+    __tablename__ = "salary_settings"
+    id = Column(Integer, primary_key=True)
+    teacher_percent = Column(Float, default=50.0)     # percent for teachers from payments
+    manager_active_percent = Column(Float, default=10.0)  # percent per active student's payments
+    manager_new_percent = Column(Float, default=25.0)     # percent from new student's first payment
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, onupdate=datetime.utcnow, default=datetime.utcnow)
+
+class Payroll(Base):
+    __tablename__ = "payroll"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role = Column(String, nullable=False)  # 'teacher' or 'manager'
+    month = Column(String, nullable=False)  # 'YYYY-MM'
+    earned = Column(Float, default=0.0)
+    deductions = Column(Float, default=0.0)
+    net = Column(Float, default=0.0)
+    status = Column(String, default="pending")  # pending | paid
+    details = Column(JSON, default={})
+    created_at = Column(DateTime, default=datetime.utcnow)
+    paid_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", backref="payrolls")
+
+class PayrollPayment(Base):
+    __tablename__ = "payroll_payments"
+    id = Column(Integer, primary_key=True)
+    payroll_id = Column(Integer, ForeignKey("payroll.id"), nullable=False)
+    paid_amount = Column(Float, nullable=False)
+    paid_by = Column(Integer, ForeignKey("users.id"))  # admin who paid
+    paid_at = Column(DateTime, default=datetime.utcnow)
+
+# ==============================
+# SCHEDULE MODEL
+# ==============================
+class Schedule(Base):
+    __tablename__ = "schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    teacher_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    day_of_week = Column(String, nullable=False)  # Monday, Tuesday...
+    start_time = Column(String, nullable=False)   # HH:MM
+    end_time = Column(String, nullable=False)
+    room = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, onupdate=datetime.utcnow, default=datetime.utcnow)
+
+    # 🔹 Relationships
+    group = relationship("Group", backref="schedules")
+    teacher = relationship("User", backref="schedules")
 

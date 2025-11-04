@@ -1,12 +1,11 @@
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum
-from datetime import date
 
 
 # ==============================
-# Role va Student status enumlari
+# ENUMLAR
 # ==============================
 class RoleEnum(str, Enum):
     admin = "admin"
@@ -23,20 +22,22 @@ class StudentStatus(str, Enum):
 
 
 # ==============================
-# User schemas
+# USER SCHEMAS
 # ==============================
 class UserBase(BaseModel):
+    id: Optional[int] = None
     username: Optional[str]
     full_name: Optional[str]
     phone: Optional[str]
     address: Optional[str]
-    subject: Optional[str]
+    subject: Optional[str] = None
     fee: Optional[float]
     status: Optional[StudentStatus] = StudentStatus.studying
-    group_id: Optional[int] = None          # ✅ optional
-    teacher_id: Optional[int] = None        # ✅ optional
     role: Optional[RoleEnum] = RoleEnum.student
     age: Optional[int] = None
+    group_id: Optional[int] = None
+    teacher_id: Optional[int] = None
+    course_id: Optional[int] = None  # ✅ Shuni qo‘sh
 
     class Config:
         from_attributes = True
@@ -45,25 +46,18 @@ class UserBase(BaseModel):
 class UserCreate(BaseModel):
     username: str
     password: str
-    role: str
+    role: RoleEnum
     full_name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
     subject: Optional[str] = None
-    fee: Optional[int] = 0
-    status: Optional[StudentStatus] = StudentStatus.studying  # <-- qo‘shildi
+    fee: Optional[float] = 0
+    status: Optional[StudentStatus] = StudentStatus.studying
     age: Optional[int] = None
     group_id: Optional[int] = None
-    teacher_id: Optional[int] = None  # optional
+    teacher_id: Optional[int] = None
+    course_id: Optional[int] = None  # ✅ Shuni qo‘sh
 
-
-
-class UserResponse(UserBase):
-    id: int
-    created_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
@@ -72,21 +66,90 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     age: Optional[int] = None
+    subject: Optional[str] = None
+    fee: Optional[float] = None
+    status: Optional[StudentStatus] = None
+
+    class Config:
+        from_attributes = True
+
+
+class UserResponse(UserBase):
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class StudentUpdate(BaseModel):
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    age: Optional[int] = None
+    subject: Optional[str] = None
+    fee: Optional[float] = None
+    status: Optional[StudentStatus] = None
+    password: Optional[str] = None
+    course_id: Optional[int] = None  # 🟢 kursini yangilash uchun
+    group_id: Optional[int] = None
+    teacher_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+# ==============================
+# COURSE SCHEMAS
+# ==============================
+class CourseBase(BaseModel):
+    title: str
+    subject: Optional[str] = None
+    teacher_id: int
+    description: Optional[str] = None
+    start_date: Optional[date] = None
+    price: Optional[float] = 0.0
+
+
+class CourseCreate(BaseModel):
+    title: str
+    subject: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[float] = 0
+    start_date: Optional[date] = None
+    teacher_id: Optional[int] = None  # frontenddan keladi
+
+
+class CourseOut(BaseModel):
+    id: int
+    title: str
+    subject: Optional[str]
+    description: Optional[str]
+    price: Optional[float]
+    start_date: Optional[date]
+    teacher_name: Optional[str]
+    teacher_id: Optional[int]
 
     class Config:
         from_attributes = True
 
 
 # ==============================
-# Group schemas
+# GROUP SCHEMAS
 # ==============================
 class GroupCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    course_id: int
+    teacher_id: int
     student_ids: Optional[List[int]] = []
-    teacher_ids: Optional[List[int]] = []
-    course_id: Optional[int] = None   # ✅ yangi qo‘shildi
 
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    course_id: Optional[int] = None
+    teacher_id: Optional[int]
+    student_ids: Optional[List[int]] = []
 
 
 class GroupResponse(BaseModel):
@@ -94,22 +157,17 @@ class GroupResponse(BaseModel):
     name: str
     description: Optional[str]
     created_at: datetime
-    student_ids: List[int] = []
-    teacher_ids: List[int] = []
-    course_id: Optional[int] = None  # ✅ yangi qo‘shildi
+    course_id: Optional[int] = None
+    course: Optional[CourseOut] = None
+    teacher: Optional[UserResponse] = None
+    students: Optional[List[UserResponse]] = []
 
     class Config:
         from_attributes = True
 
-class GroupUpdate(BaseModel):
-    name: Optional[str] = None
-    course_id: Optional[int] = None
-    teacher_id: Optional[int] = None
-    student_id: Optional[int] = None
-
 
 # ==============================
-# Payment schemas
+# PAYMENT SCHEMAS
 # ==============================
 class PaymentBase(BaseModel):
     amount: float
@@ -136,7 +194,7 @@ class PaymentResponse(PaymentBase):
 
 
 # ==============================
-# Attendance schemas
+# ATTENDANCE SCHEMAS
 # ==============================
 class AttendanceCreate(BaseModel):
     student_id: int
@@ -156,11 +214,11 @@ class AttendanceResponse(BaseModel):
 
 
 # ==============================
-# Test schemas
+# TEST SCHEMAS
 # ==============================
 class OptionCreate(BaseModel):
     text: str
-    is_correct: Optional[int] = 0   # ✅ integer (0 yoki 1) sifatida saqlanadi
+    is_correct: Optional[int] = 0
 
 
 class QuestionCreate(BaseModel):
@@ -172,7 +230,7 @@ class QuestionCreate(BaseModel):
 class TestCreate(BaseModel):
     title: str
     description: Optional[str]
-    group_id: int                    # ✅ test aniq bir guruh uchun
+    group_id: int
     questions: List[QuestionCreate]
 
 
@@ -206,12 +264,11 @@ class TestResponse(BaseModel):
         from_attributes = True
 
 
-class StudentAnswerCreate(BaseModel):
-    question_id: int
-    selected_option_id: int
 class AnswerItem(BaseModel):
     question_id: int
     option_id: int
+
+
 class TestSubmit(BaseModel):
     answers: List[AnswerItem]
 
@@ -225,27 +282,53 @@ class TestResultResponse(BaseModel):
         orm_mode = True
 
 
-class CourseBase(BaseModel):
-    title: str
-    description: str
-    start_date: date | None = None
-    end_date: date | None = None
-    price: float | None = None
+# ==============================
+# SCHEDULE SCHEMAS
+# ==============================
+class ScheduleBase(BaseModel):
+    group_id: int
+    teacher_id: Optional[int] = None  # <-- majburiy emas
+    day_of_week: str
+    start_time: str
+    end_time: str
+    room: Optional[str] = None
 
 
-class CourseCreate(BaseModel):
-    title: str
-    subject: str
-    teacher_id: int           # <-- frontend shu id ni yuborishi kerak
-    description: Optional[str] = None
-    start_date: Optional[date] = None
-    price: Optional[float] = 0.0
+class ScheduleCreate(ScheduleBase):
+    pass
 
 
-class CourseOut(CourseBase):
+class ScheduleUpdate(BaseModel):
+    group_id: Optional[int] = None
+    teacher_id: Optional[int] = None
+    day_of_week: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    room: Optional[str] = None
+
+
+class ScheduleResponse(BaseModel):
     id: int
-    creator_id: int
-    creator_name: str | None = None
+    group_id: int
+    teacher_id: int
+    day_of_week: str
+    start_time: str
+    end_time: str
+    room: Optional[str]
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    group: Optional[GroupResponse] = None
+    teacher: Optional[UserResponse] = None
 
     class Config:
-        from_attributes = True  # ✅ Pydantic v2 uchun to‘g‘ri variant
+        from_attributes = True
+
+from pydantic import BaseModel
+from typing import List, Optional
+
+
+class TestUpdate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    group_ids: List[int]
